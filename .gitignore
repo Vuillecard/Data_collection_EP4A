@@ -1,0 +1,11 @@
+*.pyc
+*.png
+*.ckpt
+*.html
+*.avi
+*.mp4
+__pycache__/
+.DS_Store
+
+*tmp*
+*trash*
