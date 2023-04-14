@@ -35,7 +35,7 @@ or run it directly through the terminal.
 
 You can have a look at the parameter definition in /demo_ep4a.py.
 
-you can first run it with --add_audio_log it should add audio and log folder where the video is located
+you can first run it with --add_audio_log it should add audio and log folder and file where the video is located
 then you can run it with --synchronise to sync the data it can take quite some time for 30 minutes videos 
 finally you can run it with --view to see the video synchronise with audio log and gaze calibration.
 ### file structure for now 
