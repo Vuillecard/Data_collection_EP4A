@@ -8,6 +8,7 @@ import cv2
 from copy import deepcopy 
 from typing import List
 from moviepy.editor import * 
+from data_handler import SessionData
 
 from synchronizer_utils import (
     get_time_from_str,
@@ -17,122 +18,6 @@ from synchronizer_utils import (
     get_fps
 )
 
-class SessionData():
-
-    def __init__(self, session_location_path) -> None:
-
-        self.session_location_path = session_location_path
-        self.modalities = { k : {} for k in ['audio','video','log']}
-
-        self.init_path()
-
-    def init_path(self):
-        self.init_audio_path()
-        self.init_video_path()
-        self.init_log_path()
-
-    def init_audio_path(self):
-        count = 0
-        for l in os.listdir(os.path.join(self.session_location_path,'audio')): 
-            if (l.split('.')[-1] == 'wav') and (l.startswith('Audio')) :
-                self.modalities['audio']['name_file'] = l
-                count +=1
-        assert(count == 1)
-    
-    def init_video_path(self):
-        self.modalities['video']['name_file_main_rgb'] = os.path.join( 'D415_main','rgb.mp4')
-        self.modalities['video']['name_file_main_depth'] = os.path.join( 'D415_main','depth.avi')
-        self.modalities['video']['name_file_main_state_file'] = os.path.join('D415_main','state.txt')
-        self.modalities['video']['name_file_side_view_rgb'] = os.path.join('D415_side_view','rgb.mp4')
-        self.modalities['video']['name_file_side_view_depth'] = os.path.join('D415_side_view','depth.avi')
-        self.modalities['video']['name_file_side_view_state_file'] = os.path.join('D415_side_view','state.txt')
-    
-    def init_log_path(self):
-        count = 0
-        for l in os.listdir(os.path.join(self.session_location_path,'log')): 
-            if (l.split('.')[-1] == 'txt') and (l.startswith('Sessions')):
-                self.modalities['log']['name_file'] = l
-                count +=1
-        assert(count <= 1)
-        if count == 0:
-            self.modalities['log']['name_file'] = None
-        else:
-            clean_log(os.path.join(self.session_location_path,'log',self.modalities['log']['name_file']),
-                    os.path.join(self.session_location_path,'log','clean_log.txt'))
-            self.modalities['log']['name_file'] = 'clean_log.txt'
-
-    def get_path(self, modality, file_name = ''):
-        if modality in ['audio','log']:
-            assert file_name == ''
-        elif modality == 'video':
-            assert file_name in ['main_rgb','main_depth','main_state_file','side_view_rgb','side_view_depth','side_view_state_file']
-        else :
-            print('Modality not found')
-            return None
-        name = 'name_file' if file_name == '' else 'name_file'+'_'+file_name
-        if self.modalities[modality][name] is None: 
-            return None
-        else:
-            return os.path.join(self.session_location_path, modality, self.modalities[modality][name])
-    
-    def set_session_location_path(self, session_location_path):
-        self.session_location_path = session_location_path
-        
-    def set_audio_start(self, beep_time : float):
-        """ Define when the beep sound in audio file
-        """
-        samplerate, _ = wavfile.read(self.get_path('audio'))
-        start_pos = int(samplerate*beep_time)
-        self.modalities['audio']['start_audio'] = start_pos
-
-    def get_audio_start(self):
-        return self.modalities['audio']['start_audio']
-    
-    def set_video_start(self, frame_light : int):
-        """ Define when the light appear on the main rbg video (same beep)
-        """
-        self.modalities['video']['start_frame_main_rgb'] = frame_light
-    
-    def get_video_start(self):
-        return self.modalities['video']['start_frame_main_rgb']
-
-    def get_video_fps(self, camera_id):
-        state_file = self.load_state_file(camera_id)
-        fps = get_fps(state_file)
-        return fps
-    
-    def create_folder(self) -> None :
-        for mod in ['audio', 'video', 'log']:
-            os.makedirs(os.path.join(self.session_location_path,mod),exist_ok=True)
-            if mod == 'video':
-                os.makedirs(os.path.join( self.session_location_path,mod,'D415_main'),exist_ok=True)
-                os.makedirs(os.path.join( self.session_location_path,mod,'D415_side_view'),exist_ok=True)
-    
-    def is_ready_to_sync(self) -> bool :
-        audio = 'start_audio' in self.modalities['audio'].keys()
-        video = 'start_frame_main_rgb' in self.modalities['video'].keys()
-        if audio and video: 
-            return True
-        else :
-            return False
-    
-    def load_state_file(self, camera_id, is_final = False): 
-        # Need to update in case the state file change
-        assert camera_id in ['main','side_view'], 'camera_id should be main or side_view'
-
-        path = self.get_path('video', camera_id+'_state_file')
-        path = path.replace('state.txt','final_state.txt') if is_final else path
-        state_file = pd.read_csv(path, delimiter=';', header=None)
-        state_file.columns = ["frames", "col_1", "col_2", "time"]
-        return state_file
-    
-    def load_log_file(self): 
-        # Need to update in case the state file change
-        path = self.get_path('log')
-        log_file = pd.read_csv(path, delimiter=';', header=None)
-        return log_file
-
-
 class Synchronizer():
 
     def __init__(self, fps = 30 ) -> None:
@@ -140,13 +25,13 @@ class Synchronizer():
     
     def resample_frames(self, state_file, from_frame):
 
-        assert(from_frame == state_file['frames'].values[from_frame])
-        start_frame = state_file['frames'].values[from_frame]
+        assert(from_frame == state_file['frame_index'].values[from_frame])
+        start_frame = state_file['frame_index'].values[from_frame]
         start_time = get_time_from_str(state_file['time'].values[from_frame])
         frame_to_keep = []
         
         current_s = 1
-        for frame_idx, time  in zip(state_file['frames'].values[start_frame:],state_file['time'].values[start_frame:]):
+        for frame_idx, time  in zip(state_file['frame_index'].values[start_frame:],state_file['time'].values[start_frame:]):
             if get_time_from_str(time)  > (start_time + dt.timedelta(0,current_s)) :
                 
                 append_frame(frame_to_keep, np.linspace(start_frame,frame_idx-1,self.fps,endpoint=True,dtype=int))
@@ -161,14 +46,14 @@ class Synchronizer():
             l.append([new_frame] + state_file.iloc[idx].to_list()) 
             new_frame += 1
         old_col_names = state_file.columns
-        col_names = ['frames'] + list(map(lambda x: x.replace('frames', 'old_frames'), old_col_names))
+        col_names = ['frame_index'] + list(map(lambda x: x.replace('frame_index', 'old_frame_index'), old_col_names))
         pd_tmp = pd.DataFrame(l,columns=col_names)
         pd_tmp.to_csv(save_location,index=False,sep = ';')
     
     def resample_log(self,state_file_location,log_location,log_save_location):
         state_file = pd.read_csv(state_file_location, delimiter=';')
         time_array = state_file['time'].values
-        get_frame = lambda x: state_file['frames'].iloc[closest_value(x,time_array)]
+        get_frame = lambda x: state_file['frame_index'].iloc[closest_value(x,time_array)]
         if log_location is None:
             pass
         else:
@@ -293,7 +178,7 @@ class Synchronizer_video_log():
     def resample_log(self,state_file_location,log_location,log_save_location):
         state_file = pd.read_csv(state_file_location, delimiter=';')
         time_array = state_file['time'].values
-        get_frame = lambda x: state_file['frames'].iloc[closest_value(x,time_array)]
+        get_frame = lambda x: state_file['frame_index'].iloc[closest_value(x,time_array)]
         if log_location is None: 
             pass
         else:
@@ -321,11 +206,16 @@ class Viewer():
     def __init__( self, ) -> None:
         pass
 
-    def audio_video( self, session: SessionData, path_save : str, camera_id: List[str], format_ffmpeg = False) -> None:
+    def audio_video( self, session: SessionData, path_save : str, camera_id: List[str],path_rgb_log : str = None, format_ffmpeg = False) -> None:
+        
+        if path_rgb_log: 
+            path_rbg = path_rgb_log
+        else:
+            path_rbg = session.get_path('video','main_rgb')
         # load the audio and video
         if len(camera_id) == 1:
             if 'main' in camera_id[0]:
-               videoclip = [[VideoFileClip(session.get_path('video','main_rgb'))]]
+               videoclip = [[VideoFileClip(path_rbg)]]
             elif 'side_view' in camera_id[0]:
                 videoclip = [[VideoFileClip(session.get_path('video','side_view_rgb'))]]
             else : 
@@ -336,13 +226,13 @@ class Viewer():
                     (('side_view' in camera_id[0]) or ('side_view' in camera_id[1])) :
             
                 videoclip = [
-                    [VideoFileClip(session.get_path('video','main_rgb')),
+                    [VideoFileClip(path_rbg),
                     VideoFileClip(session.get_path('video','side_view_rgb'))]
                 ]
             elif (('main' in camera_id[0]) or ('main' in camera_id[1])) and \
                     (('depth' in camera_id[0]) or ('depth' in camera_id[1])) : 
                 videoclip = [
-                    [VideoFileClip(session.get_path('video','main_rgb')),
+                    [VideoFileClip(path_rbg),
                     VideoFileClip(session.get_path('video','main_depth'))]
                 ]
             elif (('side_view' in camera_id[0]) or ('side_view' in camera_id[1])) and \
@@ -356,7 +246,7 @@ class Viewer():
 
         if len(camera_id) == 3:
             videoclip = [
-                [VideoFileClip(session.get_path('video','main_rgb')),
+                [VideoFileClip(session.get_path(path_rbg)),
                 VideoFileClip(session.get_path('video','side_view_rgb'))],
                 [VideoFileClip(session.get_path('video','main_depth')),
                 VideoFileClip(session.get_path('video','side_view_depth'))]
@@ -373,40 +263,42 @@ class Viewer():
             os.system('ffmpeg -i %s %s'%(path_save,path_save.replace('.mp4','_ffmpeg.mp4')))
             os.remove(path_save)
     
-    def create_video_gaze(session: SessionData, path_save):
-        state_file = session.load_state_file('main',is_final=True)
+    # def create_video_gaze(session: SessionData, path_save):
+    #     state_file = session.load_state_file('main',is_final=True)
 
-        cap = cv2.VideoCapture(video_path)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    #     cap = cv2.VideoCapture(video_path)
+    #     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    #     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    #     length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        if video_path.split('.')[-1] == 'mp4':
-            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        else: 
-            fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    #     if video_path.split('.')[-1] == 'mp4':
+    #         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    #     else: 
+    #         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         
-        out = cv2.VideoWriter(video_save_path,fourcc, self.fps, (width,height))
+    #     out = cv2.VideoWriter(video_save_path,fourcc, self.fps, (width,height))
 
-        i = -1 
-        while(cap.isOpened()):
-            ret, frame = cap.read()
-            i += 1
-            if i%1000==0:
-                print('step : ',i,'/',length,'')
-            if i in frame_to_include:
-                for _ in range(frame_as_dict[str(i)]):
-                    out.write(frame)
-            if ret==False:
-                break
+    #     i = -1 
+    #     while(cap.isOpened()):
+    #         ret, frame = cap.read()
+    #         i += 1
+    #         if i%1000==0:
+    #             print('step : ',i,'/',length,'')
+    #         if i in frame_to_include:
+    #             for _ in range(frame_as_dict[str(i)]):
+    #                 out.write(frame)
+    #         if ret==False:
+    #             break
         
-        cap.release()
-        out.release()
-        cv2.destroyAllWindows()
+    #     cap.release()
+    #     out.release()
+    #     cv2.destroyAllWindows()
 
-    def create_video_logs(session: SessionData, path_save):
+    def create_video_logs(self,session: SessionData, path_save):
 
-        logs = session.get_path('log')
+        logs = session.load_log_file()
+        state_file = session.load_state_file('main')
+        
         video_path = session.get_path('video','main_rgb')
 
         cap = cv2.VideoCapture(video_path)
@@ -414,8 +306,7 @@ class Viewer():
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         length = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
-        cap.release()
-
+        
         if video_path.split('.')[-1] == 'mp4':
             fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         else: 
@@ -425,33 +316,66 @@ class Viewer():
 
         log_frame_value = logs['frame'].values
         log_text ='No log yet'
-
-        for frame_id in range(length):
+        frame_id = -1
+        print('Processing video : %s'%video_path)
+        log_to_display = []
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if ret==False:
+                break
+            frame_id += 1
+            if frame_id%1000==0:
+                print('step : ',frame_id,'/',length,'')
             
             idx = np.where(log_frame_value == frame_id)
             if len(idx[0]) > 0:
-                log_text = logs['log'][idx[0][0]]
-            
-            frame_out = np.zeros((height,width,3),dtype=np.uint8)
+                for i in idx[0]:
+                    log_to_display.append(logs['log'][i])
+                
             font = cv2.FONT_HERSHEY_SIMPLEX
             # print the log of the videos 
-            cv2.putText(frame_out, 
-                        log_text, 
-                        (50, 50), 
-                        font, 1, 
-                        (0, 255, 255), 
-                        2, 
-                        cv2.LINE_4)
-            out.write(frame_out)
+            diplay_y = 50 
+            i = 1
+            while 50*i < height and i < len(log_to_display):
+                cv2.putText(frame, 
+                            log_to_display[-i], 
+                            (50, 50*i), 
+                            font, 1, 
+                            (0, 255, 255), 
+                            2, 
+                            cv2.LINE_4)
+                i += 1
+            
+            if state_file is not None: 
+                idx = np.where(state_file['frame_index'].values == frame_id)
+                cv2.putText(frame, 
+                            'state : %s'%state_file['gaze_state'][idx[0][0]], 
+                            (width-200, 250), 
+                            font, 1, 
+                            (0, 255, 255), 
+                            2, 
+                            cv2.LINE_4)
+                
+                frame[:200,width-400:,:] = 0
+                if state_file['gaze_state'][idx[0][0]] == 'Screen': 
+                    
+                    x,y = state_file['screen_point_2d'][idx[0][0]].split(',')
+                    x_rescale = int((float(x)/1920)*400)
+                    y_rescale = int((float(y)/1080)*200)
+                
+                    frame = cv2.circle(frame, (x_rescale+width-400,y_rescale), radius=4, color=(0, 0, 255), thickness=-1)
+
+            out.write(frame)
+
         out.release()
+        cap.release()
         cv2.destroyAllWindows()
 
+    # def view_video_and_logs():
 
-    def view_video_and_logs():
-
-    def view_main_gaze(self, session : SessionData, path_save : str): 
-        path_gaze_video = 'todo'
-        self.create_video_gaze(session,path_gaze_video)
-        videoclips = [[VideoFileClip(session.get_path('video','main_rgb')),VideoClip(path_gaze_video)]]
+    # def view_main_gaze(self, session : SessionData, path_save : str): 
+    #     path_gaze_video = 'todo'
+    #     self.create_video_gaze(session,path_gaze_video)
+    #     videoclips = [[VideoFileClip(session.get_path('video','main_rgb')),VideoClip(path_gaze_video)]]
 
 
