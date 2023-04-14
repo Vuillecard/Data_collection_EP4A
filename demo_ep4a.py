@@ -27,8 +27,8 @@ def main(args):
     if args.synchronise:
         # define the data format
         session = SessionData(path_session)
-        session.set_audio_start(5.770)
-        session.set_video_start(185)
+        session.set_audio_start(args.audio_sync)
+        session.set_video_start(args.frame_sync)
         print('Curent video fps is %.2f s '%session.get_video_fps('main'))
         # synnhronise the video 
         session_sync = synchroniser(session)  
@@ -62,11 +62,15 @@ if __name__ == '__main__':
                     help="day number")
     ap.add_argument("-p", "--participant", type=str, required=True,
                     help="participant number")
-    ap.add_argument("-a", "--add_audio_log", action='store_true',
+    ap.add_argument("--frame_sync", type=int, required=True,
+                    help=" number frame flash ")
+    ap.add_argument("--audio_sync", type=float, required=True,
+                    help=" second of the beep could like 22.777 s ")
+    ap.add_argument("--add_audio_log", action='store_true',
                     help="add audio and log to the session")
-    ap.add_argument("-s", "--synchronise", action='store_true',
+    ap.add_argument("-s","--synchronise", action='store_true',
                     help="synchronise the session")
-    ap.add_argument("-v", "--view", action='store_true',
+    ap.add_argument("-v","--view", action='store_true',
                     help="view the synchronise session")
     ap.add_argument("--save_view", default='None', help="view location")
     
