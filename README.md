@@ -26,7 +26,7 @@ To install audacity
 apt-get install audacity 
 '''
 
-Then on the main video you need to find the frame of the flash ( first frame that contain the flash) in the main video. Note: the frame number is at the top left corner. try to Be as precise as possible. 
+Then on the main video you need to find the frame of the flash ( first frame that contain the flash) in the main video. Note: the frame number is at the top left corner. try to be as precise as possible. 
 
 Warning in some session we miss and do it twice thus two beep sound !
 
