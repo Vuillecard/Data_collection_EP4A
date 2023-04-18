@@ -44,7 +44,7 @@ class SessionData():
     def init_log_path(self):
         count = 0
         for l in os.listdir(os.path.join(self.session_location_path,'log')):
-            if (l.split('.')[-1] == 'txt') and (l.startswith('Sessions')):
+            if (l.split('.')[-1] == 'txt') and (l.startswith('participant_')):
                 self.modalities['log']['name_file'] = l
                 count +=1
             if (l.split('.')[-1] == 'txt') and (l.startswith('clean_log')):
@@ -71,9 +71,9 @@ class SessionData():
             return None
         else:
             if modality == 'video':
-                return os.path.join(self.session_location_path, modality, self.modalities[modality][name]) 
-            else: 
                 return os.path.join(self.session_location_path, self.modalities[modality][name])
+            else:
+                return os.path.join(self.session_location_path, modality, self.modalities[modality][name])
     
     def set_session_location_path(self, session_location_path):
         self.session_location_path = session_location_path
@@ -103,10 +103,11 @@ class SessionData():
     
     def create_folder(self) -> None :
         for mod in ['audio', 'video', 'log']:
-            os.makedirs(os.path.join(self.session_location_path,mod),exist_ok=True)
             if mod == 'video':
-                os.makedirs(os.path.join( self.session_location_path,mod,'D415_main'),exist_ok=True)
-                os.makedirs(os.path.join( self.session_location_path,mod,'D415_side_view'),exist_ok=True)
+                os.makedirs(os.path.join( self.session_location_path,'D415_main'),exist_ok=True)
+                os.makedirs(os.path.join( self.session_location_path,'D415_side_view'),exist_ok=True)
+            else:
+                os.makedirs(os.path.join(self.session_location_path,mod),exist_ok=True)
     
     def is_ready_to_sync(self) -> bool :
         audio = 'start_audio' in self.modalities['audio'].keys()
@@ -188,7 +189,7 @@ def session_path(global_path, room, day, participant):
     path = os.path.join(global_path,'room%d'%room,'day%d'%day,'Participants',participant)
     folders = []
     for folder in os.listdir(path):
-        if not folder.startswith('calibration'):
+        if not folder.startswith('cal'):
             folders.append(folder)
     assert(len(folders) == 1)
     return os.path.join(path,folders[0])
@@ -204,13 +205,13 @@ def add_audio_and_log(global_path,room,day, participant):
     path_log = os.path.join(global_path,'LogFiles','room %d'%room,'Day%d'%day)
     for file in os.listdir(path_log):
         if file.startswith('participant_%s'%participant):
-            path_log = os.path.join(path_audio,file)
+            path_log = os.path.join(path_log,file)
             break
     
     path_video = session_path(global_path,room,day, participant)
 
     os.makedirs(os.path.join(path_video,'audio'),exist_ok=True)
     os.makedirs(os.path.join(path_video,'log'),exist_ok=True)
-    shutil.copy2(path_audio,os.path.join(path_video,'audio',path_audio.split('/')[-1]))
     shutil.copy2(path_log,os.path.join(path_video,'log',path_log.split('/')[-1]))
+    shutil.copy2(path_audio,os.path.join(path_video,'audio',path_audio.split('/')[-1]))
     

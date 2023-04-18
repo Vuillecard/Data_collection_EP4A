@@ -329,7 +329,10 @@ class Viewer():
             idx = np.where(log_frame_value == frame_id)
             if len(idx[0]) > 0:
                 for i in idx[0]:
-                    log_to_display.append(logs['log'][i])
+                    if pd.isna(logs['extra_info'][i]):
+                        log_to_display.append(logs['log'][i])
+                    else:
+                        log_to_display.append(logs['log'][i] + ": " + str(logs['extra_info'][i]))
                 
             font = cv2.FONT_HERSHEY_SIMPLEX
             # print the log of the videos 

@@ -42,12 +42,12 @@ def main(args):
             path_save = os.path.join(save_dir,'video_test_main_log.mp4')
         )
         viewer.audio_video(
-        session = session_sync, 
-        path_save = os.path.join(save_dir,'video_main_synch.mp4'),
-        camera_id= ['main'],
-        path_rgb_log= os.path.join(save_dir,'video_main_log_gaze.mp4'),
-        format_ffmpeg= False
-    )
+            session = session_sync,
+            path_save = os.path.join(save_dir,'video_main_synch.mp4'),
+            camera_id= ['main'],
+            path_rgb_log= os.path.join(save_dir,'video_test_main_log.mp4'),
+            format_ffmpeg= False
+        )
 
 
 if __name__ == '__main__':
